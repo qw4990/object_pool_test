@@ -7,8 +7,9 @@
 6. 分桶+多个LockFreeList
 7. LockFreeSlice
 8. 分桶+LockFreeSlice
+9. 外持句柄+sync.Pool TODO
 
-Note: 为什么不用原生对象池sync.Pool? 因为GC时原生对象池内的对象可能会被回收, 造成对象池对象数陡降.
+Note: 为什么不直接用原生对象池sync.Pool? 因为GC时原生对象池内的对象可能会被回收, 造成对象池对象数陡降.
 
 Note: 测试时设置并行数为CPU核心数, 然后进行并发测试.
 
