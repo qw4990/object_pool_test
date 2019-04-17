@@ -178,7 +178,7 @@ type lockFreeList struct {
 	tail *node
 }
 
-func newQueue() *lockFreeList {
+func newLockFreeList() *lockFreeList {
 	dummy := new(node)
 	return &lockFreeList{
 		head: dummy,
@@ -226,7 +226,7 @@ func (q *lockFreeList) pop() *column {
 }
 
 func BenchmarkLockFreeList(b *testing.B) {
-	q := newQueue()
+	q := newLockFreeList()
 	q.push(nil)
 	b.SetParallelism(runtime.NumCPU())
 	b.ResetTimer()
@@ -259,7 +259,7 @@ func (ma *multiLockFreeList) pop() *column {
 func newMultiLockFreeList(nBit uint64) *multiLockFreeList {
 	qs := make([]*lockFreeList, 1<<nBit)
 	for i := 0; i < (1 << nBit); i++ {
-		qs[i] = newQueue()
+		qs[i] = newLockFreeList()
 	}
 	return &multiLockFreeList{
 		qs:   qs,
