@@ -267,7 +267,7 @@ func newMultiLockFreeList(nBit uint64) *multiLockFreeList {
 	}
 }
 
-func BenchmarkLockFreeMultiQueue(b *testing.B) {
+func BenchmarkMultiLockFreeList(b *testing.B) {
 	q := newMultiLockFreeList(8)
 	q.push(nil)
 	b.SetParallelism(runtime.NumCPU())
@@ -381,6 +381,63 @@ func BenchmarkMultiLockFreeSlice(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			q.push(q.pop())
+		}
+	})
+}
+
+func BenchmarkSyncPool(b *testing.B) {
+	p := &sync.Pool{
+		New: func() interface{} { return nil },
+	}
+	p.Put(nil)
+	b.SetParallelism(runtime.NumCPU())
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			p.Put(p.Get())
+		}
+	})
+}
+
+type MultiSyncPool struct {
+	ps      []*sync.Pool
+	mask    uint64
+	curPush uint64
+	curPop  uint64
+}
+
+func newMultiSyncPool(nBit uint64) *MultiSyncPool {
+	ps := make([]*sync.Pool, 1<<nBit)
+	for i := 0; i < (1 << nBit); i++ {
+		ps[i] = &sync.Pool{New: func() interface{} { return nil }}
+	}
+	return &MultiSyncPool{
+		ps:   ps,
+		mask: (1 << nBit) - 1,
+	}
+}
+
+func (ma *MultiSyncPool) push(c *column) {
+	cur := atomic.AddUint64(&ma.curPush, 1)
+	cur &= ma.mask
+	ma.ps[cur].Put(c)
+}
+
+func (ma *MultiSyncPool) pop() *column {
+	cur := atomic.AddUint64(&ma.curPop, 1)
+	cur &= ma.mask
+	ma.ps[cur].Get()
+	return nil
+}
+
+func BenchmarkMultiSyncPool(b *testing.B) {
+	p := newMultiSyncPool(8)
+	p.push(nil)
+	b.SetParallelism(runtime.NumCPU())
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			p.push(p.pop())
 		}
 	})
 }
