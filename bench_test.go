@@ -38,12 +38,12 @@ func (ps *lockSlice) get() *column {
 		ps.cols = ps.cols[:len(ps.cols)-1]
 		return col
 	}
-	return nil
+	return new(column)
 }
 
 func BenchmarkLockSlice(b *testing.B) {
 	pool := &lockSlice{cols: make([]*column, 0, 128)}
-	pool.put(nil)
+	pool.put(new(column))
 
 	b.SetParallelism(runtime.NumCPU())
 	b.ResetTimer()
@@ -72,12 +72,12 @@ func (ps *lockList) get() *column {
 		head := ps.cols.Front()
 		return ps.cols.Remove(head).(*column)
 	}
-	return nil
+	return new(column)
 }
 
 func BenchmarkLockList(b *testing.B) {
 	pool := &lockList{cols: list.New()}
-	pool.put(nil)
+	pool.put(new(column))
 
 	b.SetParallelism(runtime.NumCPU())
 	b.ResetTimer()
@@ -104,7 +104,7 @@ func (p *channel) get() *column {
 	case col := <-p.pool:
 		return col
 	default:
-		return nil
+		return new(column)
 	}
 }
 
@@ -112,7 +112,7 @@ func BenchmarkChannel(b *testing.B) {
 	pool := &channel{
 		pool: make(chan *column, 128),
 	}
-	pool.put(nil)
+	pool.put(new(column))
 
 	b.SetParallelism(runtime.NumCPU())
 	b.ResetTimer()
@@ -157,7 +157,7 @@ func (ma *multiChannel) pop() *column {
 
 func BenchmarkMultiChannel(b *testing.B) {
 	pool := NewMultiChannel(128, 8)
-	pool.push(nil)
+	pool.push(new(column))
 
 	b.SetParallelism(runtime.NumCPU())
 	b.ResetTimer()
@@ -208,7 +208,7 @@ func (q *lockFreeList) pop() *column {
 	for swapped := false; !swapped; {
 		res = q.head.next
 		if res == nil {
-			return nil
+			return new(column)
 		}
 
 		swapped = atomic.CompareAndSwapPointer(
@@ -227,7 +227,7 @@ func (q *lockFreeList) pop() *column {
 
 func BenchmarkLockFreeList(b *testing.B) {
 	q := newLockFreeList()
-	q.push(nil)
+	q.push(new(column))
 	b.SetParallelism(runtime.NumCPU())
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
@@ -269,7 +269,7 @@ func newMultiLockFreeList(nBit uint64) *multiLockFreeList {
 
 func BenchmarkMultiLockFreeList(b *testing.B) {
 	q := newMultiLockFreeList(8)
-	q.push(nil)
+	q.push(new(column))
 	b.SetParallelism(runtime.NumCPU())
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
@@ -315,7 +315,7 @@ func (a *lockFreeSlice) push(c *column) {
 func (a *lockFreeSlice) pop() *column {
 	if atomic.AddInt64(&a.n, -1) < 0 {
 		atomic.AddInt64(&a.n, 1)
-		return nil
+		return new(column)
 	}
 	for {
 		h1 := atomic.LoadInt64(&a.head)
@@ -333,7 +333,7 @@ func (a *lockFreeSlice) pop() *column {
 
 func BenchmarkLockFreeSlice(b *testing.B) {
 	q := newArray(10000)
-	q.push(nil)
+	q.push(new(column))
 	b.SetParallelism(runtime.NumCPU())
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
@@ -375,7 +375,7 @@ func (ma *multiLockFreeSlice) pop() *column {
 
 func BenchmarkMultiLockFreeSlice(b *testing.B) {
 	q := NewMultiArray(1000, 8)
-	q.push(nil)
+	q.push(new(column))
 	b.SetParallelism(runtime.NumCPU())
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
@@ -387,10 +387,10 @@ func BenchmarkMultiLockFreeSlice(b *testing.B) {
 
 func BenchmarkSyncPool(b *testing.B) {
 	p := &sync.Pool{
-		New: func() interface{} { return nil },
+		New: func() interface{} { return new(column) },
 	}
-	p.Put(nil)
-	b.SetParallelism(runtime.NumCPU())
+	p.Put(1)
+	//b.SetParallelism(runtime.NumCPU())
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
@@ -409,7 +409,7 @@ type MultiSyncPool struct {
 func newMultiSyncPool(nBit uint64) *MultiSyncPool {
 	ps := make([]*sync.Pool, 1<<nBit)
 	for i := 0; i < (1 << nBit); i++ {
-		ps[i] = &sync.Pool{New: func() interface{} { return nil }}
+		ps[i] = &sync.Pool{New: func() interface{} { return new(column) }}
 	}
 	return &MultiSyncPool{
 		ps:   ps,
@@ -426,13 +426,12 @@ func (ma *MultiSyncPool) push(c *column) {
 func (ma *MultiSyncPool) pop() *column {
 	cur := atomic.AddUint64(&ma.curPop, 1)
 	cur &= ma.mask
-	ma.ps[cur].Get()
-	return nil
+	return ma.ps[cur].Get().(*column)
 }
 
 func BenchmarkMultiSyncPool(b *testing.B) {
 	p := newMultiSyncPool(8)
-	p.push(nil)
+	p.push(new(column))
 	b.SetParallelism(runtime.NumCPU())
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {

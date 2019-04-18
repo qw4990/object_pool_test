@@ -12,12 +12,14 @@
 
 Note: 原生sync.Pool只是用来做对比测试, 之前的实际实验中已经确认他没有收益(#9396), 因为GC时原生对象池内的对象会被回收.
 
+TODO: 后续尝试sync.Pool + 调整GOGC参数来看下是不是效果更好.
+
 Note: 测试时设置并行数为CPU核心数, 然后进行并发测试.
 
 Note: 分桶都分为128个桶.
 
 结论:
-1. LockFree的实现和sync.Pool性能已经较为接近.
+1. LockFree的实现和sync.Pool仍然有1-2个数量级的差距.
 2. 并发数越大, 分桶策略优势约明显.
 3. 无并发时, 策略3效果最好.
 4. 并发大于等于4时, 策略4, 6, 8的效果就超过3了.
@@ -62,18 +64,19 @@ NUM CPU:  4
 goos: darwin
 goarch: amd64
 pkg: lab/pool
-BenchmarkLockSlice-4                    10000000               226 ns/op
-BenchmarkLockList-4                      5000000               283 ns/op
-BenchmarkChannel-4                      20000000                87.4 ns/op
-BenchmarkMultiChannel-4                 20000000                89.1 ns/op
-BenchmarkLockFreeList-4                 10000000               130 ns/op
-BenchmarkMultiLockFreeList-4            20000000                80.4 ns/op
-BenchmarkLockFreeSlice-4                10000000               132 ns/op
-BenchmarkMultiLockFreeSlice-4           20000000                81.6 ns/op
-BenchmarkSyncPool-4                     10000000               135 ns/op
-BenchmarkMultiSyncPool-4                20000000                74.0 ns/op
-BenchmarkCASUnsafe-4                    200000000                9.40 ns/op
-BenchmarkCASInt64-4                     200000000                7.03 ns/op
+BenchmarkLockSlice-4                    10000000               192 ns/op
+BenchmarkLockList-4                      5000000               236 ns/op
+BenchmarkChannel-4                      20000000                88.3 ns/op
+BenchmarkMultiChannel-4                 20000000                75.0 ns/op
+BenchmarkLockFreeList-4                 10000000               132 ns/op
+BenchmarkMultiLockFreeList-4            20000000                62.6 ns/op
+BenchmarkLockFreeSlice-4                10000000               125 ns/op
+BenchmarkMultiLockFreeSlice-4           20000000                58.8 ns/op
+BenchmarkSyncPool-4                     200000000               13.4 ns/op
+BenchmarkMultiSyncPool-4                20000000                58.5 ns/op
+BenchmarkCASUnsafe-4                    200000000                9.31 ns/op
+BenchmarkCASInt64-4                     200000000                6.98 ns/op
+
 ```
 
 2: 开发机1
@@ -105,21 +108,20 @@ L3 缓存：           8192K
 
 测试结果:
 NUM CPU:  8
-NUM CPU:  8
 goos: linux
 goarch: amd64
-BenchmarkLockSlice-8            	 5000000	       368 ns/op
-BenchmarkLockList-8             	 3000000	       512 ns/op
-BenchmarkChannel-8              	 5000000	       297 ns/op
-BenchmarkMultiChannel-8         	20000000	        73.4 ns/op
-BenchmarkLockFreeList-8         	10000000	       162 ns/op
-BenchmarkMultiLockFreeList-8    	20000000	        62.2 ns/op
+BenchmarkLockSlice-8            	 5000000	       366 ns/op
+BenchmarkLockList-8             	 3000000	       527 ns/op
+BenchmarkChannel-8              	 5000000	       265 ns/op
+BenchmarkMultiChannel-8         	30000000	        58.4 ns/op
+BenchmarkLockFreeList-8         	10000000	       161 ns/op
+BenchmarkMultiLockFreeList-8    	30000000	        49.2 ns/op
 BenchmarkLockFreeSlice-8        	10000000	       181 ns/op
-BenchmarkMultiLockFreeSlice-8   	20000000	        73.4 ns/op
-BenchmarkSyncPool-8             	10000000	       239 ns/op
-BenchmarkMultiSyncPool-8        	20000000	        63.2 ns/op
+BenchmarkMultiLockFreeSlice-8   	30000000	        59.8 ns/op
+BenchmarkSyncPool-8             	300000000	         3.70 ns/op
+BenchmarkMultiSyncPool-8        	30000000	        51.4 ns/op
 BenchmarkCASUnsafe-8            	200000000	         8.78 ns/op
-BenchmarkCASInt64-8             	300000000	         4.79 ns/op
+BenchmarkCASInt64-8             	300000000	         4.77 ns/op
 ```
 
 3: 开发机2
@@ -155,16 +157,16 @@ NUMA node1 CPU(s):     1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33,35,37,39
 NUM CPU:  40
 goos: linux
 goarch: amd64
-BenchmarkLockSlice-40             	 3000000	       599 ns/op
-BenchmarkLockList-40              	 2000000	      1082 ns/op
-BenchmarkChannel-40               	 1000000	      1173 ns/op
-BenchmarkMultiChannel-40          	10000000	       218 ns/op
-BenchmarkLockFreeList-40          	 3000000	       651 ns/op
-BenchmarkMultiLockFreeList-40     	10000000	       214 ns/op
-BenchmarkLockFreeSlice-40         	 5000000	       281 ns/op
-BenchmarkMultiLockFreeSlice-40    	10000000	       211 ns/op
-BenchmarkSyncPool-40              	 1000000	      1138 ns/op
-BenchmarkMultiSyncPool-40         	10000000	       197 ns/op
-BenchmarkCASUnsafe-40             	100000000	        14.8 ns/op
-BenchmarkCASInt64-40              	200000000	         8.04 ns/op
+BenchmarkLockSlice-40             	 3000000	       507 ns/op
+BenchmarkLockList-40              	 1000000	      1006 ns/op
+BenchmarkChannel-40               	 1000000	      1182 ns/op
+BenchmarkMultiChannel-40          	10000000	       201 ns/op
+BenchmarkLockFreeList-40          	 2000000	       612 ns/op
+BenchmarkMultiLockFreeList-40     	10000000	       202 ns/op
+BenchmarkLockFreeSlice-40         	 5000000	       288 ns/op
+BenchmarkMultiLockFreeSlice-40    	10000000	       192 ns/op
+BenchmarkSyncPool-40              	2000000000	         1.42 ns/op
+BenchmarkMultiSyncPool-40         	10000000	       176 ns/op
+BenchmarkCASUnsafe-40             	100000000	        15.3 ns/op
+BenchmarkCASInt64-40              	200000000	         8.30 ns/op
 ```
